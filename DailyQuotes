@@ -1,0 +1,147 @@
+// DailyQuotesApp.swift
+import SwiftUI
+
+@main
+struct DailyQuotesApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+
+// ContentView.swift
+import SwiftUI
+
+struct ContentView: View {
+    @StateObject private var viewModel = QuoteViewModel()
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                if let quote = viewModel.currentQuote {
+                    Text("\"\(quote.text)\"")
+                        .font(.title2)
+                        .multilineTextAlignment(.center)
+                        .padding()
+
+                    Text("- \(quote.author ?? "Unknown")")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+
+                    Button(action: viewModel.getRandomQuote) {
+                        Text("New Quote")
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+
+                    Button(action: {
+                        viewModel.toggleFavorite()
+                    }) {
+                        Image(systemName: viewModel.isFavorite ? "heart.fill" : "heart")
+                            .foregroundColor(.red)
+                            .font(.title)
+                    }
+
+                    Button(action: {
+                        viewModel.shareQuote()
+                    }) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                } else {
+                    ProgressView("Loading quote...")
+                }
+            }
+            .padding()
+            .navigationTitle("Daily Quotes")
+        }
+        .onAppear {
+            viewModel.getQuotes()
+        }
+    }
+}
+
+// Quote.swift
+import Foundation
+
+struct Quote: Codable, Identifiable {
+    var id: UUID { UUID() }
+    let text: String
+    let author: String?
+
+    enum CodingKeys: String, CodingKey {
+        case text = "text"
+        case author = "author"
+    }
+}
+
+// QuoteViewModel.swift
+import Foundation
+import SwiftUI
+import UIKit
+
+class QuoteViewModel: ObservableObject {
+    @Published var quotes: [Quote] = []
+    @Published var currentQuote: Quote?
+    @Published var isFavorite: Bool = false
+
+    private let favoritesKey = "favoriteQuote"
+
+    func getQuotes() {
+        guard let url = URL(string: "https://type.fit/api/quotes") else { return }
+
+        URLSession.shared.dataTask(with: url) { data, _, error in
+            guard let data = data, error == nil else { return }
+
+            DispatchQueue.main.async {
+                do {
+                    self.quotes = try JSONDecoder().decode([Quote].self, from: data)
+                    self.getRandomQuote()
+                } catch {
+                    print("Decoding error: \(error)")
+                }
+            }
+        }.resume()
+    }
+
+    func getRandomQuote() {
+        guard !quotes.isEmpty else { return }
+        currentQuote = quotes.randomElement()
+        isFavorite = checkIfFavorite()
+    }
+
+    func toggleFavorite() {
+        guard let quote = currentQuote else { return }
+        if isFavorite {
+            UserDefaults.standard.removeObject(forKey: favoritesKey)
+            isFavorite = false
+        } else {
+            if let data = try? JSONEncoder().encode(quote) {
+                UserDefaults.standard.set(data, forKey: favoritesKey)
+                isFavorite = true
+            }
+        }
+    }
+
+    func checkIfFavorite() -> Bool {
+        guard let quote = currentQuote else { return false }
+        if let data = UserDefaults.standard.data(forKey: favoritesKey),
+           let savedQuote = try? JSONDecoder().decode(Quote.self, from: data) {
+            return savedQuote.text == quote.text
+        }
+        return false
+    }
+
+    func shareQuote() {
+        guard let quote = currentQuote else { return }
+        let quoteString = "\"\(quote.text)\" - \(quote.author ?? "Unknown")"
+        let activityVC = UIActivityViewController(activityItems: [quoteString], applicationActivities: nil)
+
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = windowScene.windows.first?.rootViewController {
+            rootVC.present(activityVC, animated: true, completion: nil)
+        }
+    }
+}
