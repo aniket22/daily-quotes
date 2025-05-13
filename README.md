@@ -21,6 +21,10 @@ DailyQuotes is an elegant app that fetches motivational and inspirational quotes
 
 - `https://type.fit/api/quotes` – Free public quotes API
 
+## 📸 Screenshots
+
+> (Add screenshots after running the app)
+
 ## 🧪 How to Run
 
 1. Clone the project
